@@ -12,12 +12,14 @@ from Discriminator import Discriminator
 from HelperFunc import loss
 import matplotlib.pyplot as plt
 from HelperFunc import get_next_batch
-class DCGAN:
+
+class cGAN:
     
     
-    def __init__(self,img_shape, d_lr=.0001, g_lr=.0004, z_shape=100, number_of_iter=1000, batch_size=1000, epochs=1000):
-        self.d_lr = d_lr
-        self.g_lr = g_lr
+    def __init__(self,img_shape=(28, 28, 1), discriminator_learning_rate=.0001, generator_learning_rate=.0001, z_shape=100, number_of_iter=1000, batch_size=1000, epochs=1000,smoothing_factor=.95):
+
+        self.discriminator_learning_rate = discriminator_learning_rate
+        self.generator_learning_rate = generator_learning_rate
         self.number_of_iter = number_of_iter
         self.batch_size = batch_size
         self.generator = Generator(img_shape,z_shape)
@@ -25,6 +27,7 @@ class DCGAN:
         self.z_shape = z_shape
         self.epochs = epochs
         self.rows,self.cols,self.channels = img_shape
+        self.smoothing_factor=smoothing_factor
         
         mnist = tf.keras.datasets.mnist
         (x_train, y_train), (x_test, y_test)=mnist.load_data(path="mnist.npz")
@@ -42,8 +45,6 @@ class DCGAN:
         self.x_data = np.concatenate((x_train,x_test),axis=0)
         self.y_data = np.concatenate((y_train,y_test),axis=0)
         
-        print("Train matrix shape", self.x_data.shape)
-        
         self.phX = tf.placeholder(tf.float32,[None,784])
         self.phY = tf.placeholder(tf.float32,[None,10])
         self.phZ = tf.placeholder(tf.float32,[None,self.z_shape])
@@ -55,7 +56,7 @@ class DCGAN:
         
         
         D_loss_fake = loss(tf.zeros_like(D_logits_fake),D_logits_fake)
-        D_loss_real = loss(tf.ones_like(D_logits_real),D_logits_real)
+        D_loss_real = loss(tf.ones_like(D_logits_real)*self.smoothing_factor,D_logits_real)
         
         self.D_loss = tf.add(D_loss_real,D_loss_fake)
         self.G_loss = loss(tf.ones_like(D_logits_fake),D_logits_fake)
@@ -65,20 +66,24 @@ class DCGAN:
         self.gvars = [var for var in tvars if "gen" in var.name]
         self.dvars = [var for var in tvars if "dis" in var.name]
         
-        self.train_gen = tf.train.AdamOptimizer(g_lr).minimize(self.G_loss,var_list=self.gvars)
-        self.train_dis = tf.train.AdamOptimizer(d_lr).minimize(self.D_loss,var_list=self.dvars)
+        self.train_gen = tf.train.AdamOptimizer(generator_learning_rate).minimize(self.G_loss,var_list=self.gvars)
+        self.train_dis = tf.train.AdamOptimizer(discriminator_learning_rate).minimize(self.D_loss,var_list=self.dvars)
         
         
     def train(self):
+
         init = tf.global_variables_initializer()
+
         cfg = tf.ConfigProto(allow_soft_placement=True )
         cfg.gpu_options.allow_growth = True
+
         self.sess = tf.Session(config=cfg)
         self.sess.run(init)
+
         saver = tf.train.Saver(var_list=self.gvars)
         
         for i in range(self.epochs):
-        
+
             _,train_gen_batch_y = get_next_batch(self.x_data,self.y_data,self.batch_size)
             train_gen_batch_z = np.random.uniform(-1, 1, (self.batch_size, self.z_shape))
             g_loss,_=self.sess.run([self.G_loss,self.train_gen],feed_dict={self.phZ:train_gen_batch_z, self.phY:train_gen_batch_y})
@@ -88,41 +93,41 @@ class DCGAN:
             d_loss,_=self.sess.run([self.D_loss,self.train_dis],feed_dict={self.phX:train_dis_batch_x, self.phY:train_dis_batch_y,self.phZ:train_dis_batch_z})            
             
             if i%100 == 0:
-                print("Epoch: {} Discriminator loss: {} Generator loss: {}".format(i,d_loss,g_loss))   
-        saver.save(self.sess, './models/10000_epoch_model.ckpt')
+                print("Epoch: {} Discriminator loss: {} Generator loss: {}".format(i,d_loss,g_loss))
+   
+        saver.save(self.sess, './trained_models/epochs='+str(self.epochs)+'batch_size='+str(self.batch_size)+'model.ckpt')
         
         
-    def test(self):
+    def test(self,model_path=' '):
+
+        if model_path==' ':
+            model_path='./trained_models/epochs='+str(self.epochs)+'batch_size='+str(self.batch_size)+'model.ckpt'
+
         init = tf.global_variables_initializer()
+
         cfg = tf.ConfigProto(allow_soft_placement=True )
         cfg.gpu_options.allow_growth = True
         self.sess = tf.Session(config=cfg)
         self.sess.run(init)
+
         saver = tf.train.Saver(var_list=self.gvars)
-        saver.restore(self.sess,'./models/10000_epoch_model.ckpt')
-        
+        saver.restore(self.sess,model_path)
+
+        f, axarr = plt.subplots(10, 5)
+
         for i in range(10):
+
             new_samples=[]
+
             y_val=np.zeros([1,10])
             y_val[0][i]=1
-            plt.subplots(figsize=(15,15))
+
             for j in range(5):
+
                 sample_z = np.random.uniform(-1,1,size=(1,100))
                 gen_sample = self.sess.run(self.generator.generatorFn(self.phZ,self.phY,reuse=True),feed_dict={self.phZ:sample_z,self.phY:y_val})
                 new_samples.append(gen_sample*255)
-                plt.subplot(10,5,i*5+j+1)
-                plt.imshow(new_samples[j].reshape(28,28),cmap='Greys')
-        
+                axarr[i,j].imshow(new_samples[j].reshape(28,28),cmap='Greys')
+
+        plt.show()
                 
-if __name__ == '__main__':
-    
-    tf.reset_default_graph()
-    img_shape = (28, 28, 1)
-    epochs = 10000
-    dcgan = DCGAN(img_shape, epochs=epochs)
-    '''   TRAIN '''
-    
-    dcgan.train()
-            
-    ''' TEST '''
-    dcgan.test()

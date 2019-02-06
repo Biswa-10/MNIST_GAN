@@ -1,0 +1,2 @@
+model_checkpoint_path: "epochs=100000batch_size=500model.ckpt"
+all_model_checkpoint_paths: "epochs=100000batch_size=500model.ckpt"
