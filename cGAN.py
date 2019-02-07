@@ -16,7 +16,7 @@ from HelperFunc import get_next_batch
 class cGAN:
     
     
-    def __init__(self,img_shape=(28, 28, 1), discriminator_learning_rate=.0001, generator_learning_rate=.0001, z_shape=100, number_of_iter=1000, batch_size=1000, epochs=1000,smoothing_factor=.95):
+    def __init__(self,img_shape=(28, 28, 1), discriminator_learning_rate=.0001, generator_learning_rate=.0001, z_shape=100, number_of_iter=1000, batch_size=1000, epochs=1000,smoothing_factor=.9):
 
         self.discriminator_learning_rate = discriminator_learning_rate
         self.generator_learning_rate = generator_learning_rate
@@ -54,20 +54,20 @@ class cGAN:
         D_output_fake, D_logits_fake = self.discriminator.discriminatorFn(self.generator_output,self.phY)
         D_output_real, D_logits_real = self.discriminator.discriminatorFn(self.phX,self.phY,reuse=True)
         
-        
-        D_loss_fake = loss(tf.zeros_like(D_logits_fake),D_logits_fake)
-        D_loss_real = loss(tf.ones_like(D_logits_real)*self.smoothing_factor,D_logits_real)
+        D_loss_fake = loss(tf.zeros_like(D_output_fake),D_output_fake)
+        D_loss_real = loss(tf.ones_like(D_output_real)*self.smoothing_factor,D_output_real)
         
         self.D_loss = tf.add(D_loss_real,D_loss_fake)
-        self.G_loss = loss(tf.ones_like(D_logits_fake),D_logits_fake)
+        self.G_loss = loss(tf.ones_like(D_output_fake),D_output_fake)
         
         tvars = tf.trainable_variables()
         
         self.gvars = [var for var in tvars if "gen" in var.name]
         self.dvars = [var for var in tvars if "dis" in var.name]
         
-        self.train_gen = tf.train.AdamOptimizer(generator_learning_rate).minimize(self.G_loss,var_list=self.gvars)
         self.train_dis = tf.train.AdamOptimizer(discriminator_learning_rate).minimize(self.D_loss,var_list=self.dvars)
+        self.train_gen = tf.train.AdamOptimizer(generator_learning_rate).minimize(self.G_loss,var_list=self.gvars)
+        
         
         
     def train(self):
@@ -84,13 +84,11 @@ class cGAN:
         
         for i in range(self.epochs):
 
-            _,train_gen_batch_y = get_next_batch(self.x_data,self.y_data,self.batch_size)
-            train_gen_batch_z = np.random.uniform(-1, 1, (self.batch_size, self.z_shape))
-            g_loss,_=self.sess.run([self.G_loss,self.train_gen],feed_dict={self.phZ:train_gen_batch_z, self.phY:train_gen_batch_y})
-
-            train_dis_batch_x,train_dis_batch_y = get_next_batch(self.x_data,self.y_data,self.batch_size)
-            train_dis_batch_z = np.random.uniform(-1, 1, (self.batch_size, self.z_shape))
-            d_loss,_=self.sess.run([self.D_loss,self.train_dis],feed_dict={self.phX:train_dis_batch_x, self.phY:train_dis_batch_y,self.phZ:train_dis_batch_z})            
+            train_batch_x,train_batch_y = get_next_batch(self.x_data,self.y_data,self.batch_size)
+            train_batch_z = np.random.uniform(-1, 1, (self.batch_size, self.z_shape))
+            d_loss,_=self.sess.run([self.D_loss,self.train_dis],feed_dict={self.phX:train_batch_x, self.phY:train_batch_y,self.phZ:train_batch_z})   
+            g_loss,_=self.sess.run([self.G_loss,self.train_gen],feed_dict={self.phZ:train_batch_z, self.phY:train_batch_y})
+         
             
             if i%100 == 0:
                 print("Epoch: {} Discriminator loss: {} Generator loss: {}".format(i,d_loss,g_loss))

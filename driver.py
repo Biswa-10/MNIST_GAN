@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
     tf.reset_default_graph()
 
-    cgan = cGAN(discriminator_learning_rate=.0001, generator_learning_rate=.0004, epochs=100000,batch_size=500)
+    cgan = cGAN(discriminator_learning_rate=.0001, generator_learning_rate=.0004, epochs=50000,batch_size=1000)
 
     '''   TRAIN  '''
     

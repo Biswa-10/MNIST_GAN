@@ -4,14 +4,6 @@ Created on Wed Jan 19 05:02:12 2019
 
 @author: Biswajit
 """
-
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Jan 22 11:32:37 2019
-
-@author: Biswajit
-"""
-
 import tensorflow as tf
 
 class Generator:
